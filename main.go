@@ -24,19 +24,19 @@ func isEmailValido(email string) bool {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	// Configurar CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-	// Responder OPTIONS
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
+	if r.Method != http.MethodPost && r.Method != http.MethodOptions {
+		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 		return
 	}
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
+	// Configurar CORS
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+	// Responder OPTIONS (preflight)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -51,7 +51,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Pegar variáveis do ambiente
 	from := os.Getenv("EMAIL_REMETENTE")
 	password := os.Getenv("EMAIL_SENHA")
 	to := os.Getenv("EMAIL_DESTINATARIO")
@@ -76,6 +75,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Usar handler padrão
 	http.HandleFunc("/contato", Handler)
 
 	// Porta que o Render fornece (ou fallback para 8080 localmente)
