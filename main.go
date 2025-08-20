@@ -25,6 +25,7 @@ func isEmailValido(email string) bool {
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodOptions {
+		log.Println("Método não permitido:", r.Method)
 		http.Error(w, "Método não permitido", http.StatusMethodNotAllowed)
 		return
 	}
@@ -36,25 +37,42 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	// Responder OPTIONS (preflight)
 	if r.Method == http.MethodOptions {
+		log.Println("Preflight OPTIONS recebido")
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
+	// Decodificar JSON
 	var c Contato
 	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		log.Println("Erro ao decodificar JSON:", err)
 		http.Error(w, "JSON inválido", http.StatusBadRequest)
 		return
 	}
+	log.Printf("Payload recebido: %+v\n", c)
 
+	// Validar campos
 	if c.Nome == "" || !isEmailValido(c.Email) || strings.TrimSpace(c.Mensagem) == "" {
+		log.Println("Validação falhou:", c)
 		http.Error(w, "Campos inválidos", http.StatusBadRequest)
 		return
 	}
 
+	// Variáveis de ambiente
 	from := os.Getenv("EMAIL_REMETENTE")
 	password := os.Getenv("EMAIL_SENHA")
 	to := os.Getenv("EMAIL_DESTINATARIO")
 
+	if from == "" || password == "" || to == "" {
+		log.Println("Variáveis de ambiente ausentes:")
+		log.Println("EMAIL_REMETENTE:", from)
+		log.Println("EMAIL_SENHA:", password != "") // não loga senha em texto puro
+		log.Println("EMAIL_DESTINATARIO:", to)
+		http.Error(w, "Configuração de e-mail ausente", http.StatusInternalServerError)
+		return
+	}
+
+	// Montar mensagem
 	assunto := fmt.Sprintf("portfólio - %s", c.Email)
 	corpo := fmt.Sprintf("Nome: %s\n\nMensagem:\n%s", c.Nome, c.Mensagem)
 
@@ -64,21 +82,22 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	m.SetHeader("Subject", assunto)
 	m.SetBody("text/plain", corpo)
 
+	// Enviar e-mail
 	d := gomail.NewDialer("smtp.gmail.com", 587, from, password)
 	if err := d.DialAndSend(m); err != nil {
+		log.Println("Erro ao enviar e-mail:", err)
 		http.Error(w, "Erro ao enviar e-mail", http.StatusInternalServerError)
 		return
 	}
 
+	log.Println("E-mail enviado com sucesso!")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("E-mail enviado com sucesso!"))
 }
 
 func main() {
-	// Usar handler padrão
 	http.HandleFunc("/contato", Handler)
 
-	// Porta que o Render fornece (ou fallback para 8080 localmente)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
